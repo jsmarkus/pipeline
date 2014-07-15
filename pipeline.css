@@ -17,12 +17,24 @@
   background: #656552;
 }
 
-.ppl-stop-container {
+.ppl-wrapper {
+  width: 1000px;
   position: relative;
+}
 
+.ppl-stop-container {
+  width: 100%;
   height: 90px;
   background: #DADADA;
-  width: 1000px;
+}
+
+.ppl-tick-marker {
+  position: absolute;
+  z-index: 0;
+
+  height: 15px;
+  width: 1px;
+  background: #78A3BE;
 }
 
 .ppl-stop-marker {
