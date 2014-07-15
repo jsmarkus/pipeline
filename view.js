@@ -122,6 +122,7 @@ Pipeline.prototype.setZoom = function(zoom) {
   this._pixelsADay = Math.pow(2, zoom) * ZOOMING_RESOLUTION / ZOOMING_BASE_NUMBER;
 
   this._updateViewportInfo();
+  this._recalculatePositions();
 };
 
 Pipeline.prototype.zoomPlus = function() {
@@ -190,6 +191,15 @@ Pipeline.prototype.setStateWaitDrag = function() {
 
 Pipeline.prototype.isStateWaitDrag = function() {
   return this._state === STATE_WAIT_DRAG;
+};
+
+Pipeline.prototype._recalculatePositions = function() {
+  var currentStop = this.model.firstStop;
+  while (currentStop) {
+    var marker = this._stopMarkerByStop(currentStop);
+    marker.setOffset(this.dayToOffset(currentStop.value));
+    currentStop = currentStop.next;
+  }
 };
 
 Pipeline.prototype._updateViewportInfo = function() {
