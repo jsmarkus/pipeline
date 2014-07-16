@@ -22,6 +22,7 @@ module.exports = function(grunt) {
         src: [
           '_build/intro.js',
           'utils.js',
+          'fmt.js',
           'constants.js',
           'event.js',
           'model.js',

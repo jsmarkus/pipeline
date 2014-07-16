@@ -1,0 +1,168 @@
+.ppl-line{
+  height: 46px;
+  width: 2px;
+  position: absolute;
+  top: -52px;
+  right: 12px;
+}
+.ppl-line.active{
+  /*background: #585353;*/
+  background-color: #149bdf;
+  background-image:  linear-gradient(45deg, rgba(255, 255, 255, 0.15) 25%, transparent 25%, transparent 50%, rgba(255, 255, 255, 0.15) 50%, rgba(255, 255, 255, 0.15) 75%, transparent 75%, transparent); 
+  cursor: ew-resize;
+  /*-webkit-animation: progress-bar-stripes 2s linear infinite;
+  animation: progress-bar-stripes 2s linear infinite;*/
+}
+
+
+
+.ppl-root-wrapper{
+  height: 100%;
+}
+
+.ppl-root-scrollbody{
+  overflow-x: auto;
+  height: 180px;
+  box-shadow: inset 0px 0px 4px rgba(0, 0, 0, 0.12);
+  border-radius: 5px;
+  border: 1px solid #ccc;
+  background: url(images/code.gif);
+}
+
+.ppl-ruler{
+  height: 10px;
+  padding-top: 20px;
+  background: #F8F8F8;
+  border-bottom: 1px solid #E2E2E2;
+  width: 100%;
+  float: left;
+}
+.ppl-ruler-tick{
+  width: 3px;
+  height: 10px;
+  background: #B9B9B9;
+  float: left;
+  margin-left: 5px;
+}
+.ppl-ruler-tick.base{
+  height: 20px;
+  position: relative;
+  top: -10px;
+}
+.base-item{
+  position: absolute;
+  left: 5px;
+  top: -4px;
+  font: 10px 'Trebuchet MS', Helvetica, sans-serif;
+}
+
+.ppl-ruler-tick:first-child{
+  margin: 0;
+}
+.ppl-interval-container{
+  height: 50px;
+  margin-top: 5px;
+  float: left;
+  background: #eee;
+}
+.ppl-interval{
+  float: left;
+  background: linear-gradient(to bottom, #0092b9 0%,#007da0 100%); 
+  border-radius: 7px;
+  height: 100%;
+  -webkit-box-sizing: border-box;
+  -moz-box-sizing: border-box;
+  box-sizing: border-box;
+  border: 1px solid #EBEBEB;
+}
+.ppl-interval:first-child{
+  border-radius: 0 7px 7px 0;
+}
+.ppl-interval:last-child{
+  border-radius: 7px 0 0 7px;;
+}
+
+.ppl-stop-container{
+  height: 72px;
+  width: 100%;
+  position: relative;
+  float: left;
+}
+.ppl-stop{
+  position: absolute;
+  width: 26px;
+  text-align: center;
+  height: 55px;
+  border-radius: 7px;
+  top: 1px;
+  cursor: pointer;
+  border: 1px solid #A3A3A3;
+  background: #f3f3f3;
+  z-index: 1;
+  text-shadow: 1px 1px #ECECEC;
+}
+
+.ppl-stop.active{
+  /*border-color: #535DC7;*/
+  background: #c1ddf1;
+  border-color: #1084BE;
+
+}
+
+.ppl-stop:hover{
+  z-index: 2;
+}
+
+.ppl-stop.draggable{
+  z-index: 3;
+  cursor: ew-resize;
+  color: #fff;
+  border-color: #149bdf;
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.14);
+  text-shadow: 1px 1px #747474; 
+}
+
+.ppl-stop-date:before, .ppl-stop-date:after{
+  content: "";
+  width: 0;
+  height: 0;
+  position: absolute;
+  left: 8px;
+  top: -5px;
+  border-style: solid;
+  border-width: 0 5px 5px 5px;
+}
+
+.ppl-stop-date:before{
+  top: -6px;
+  border-color: transparent transparent #818181 transparent;
+}
+
+.active .ppl-stop-date:after{
+  border-color: transparent transparent #c1ddf1 transparent;
+}
+.active .ppl-stop-date:before{
+  border-color: transparent transparent #1084BE transparent;
+}
+.ppl-stop-date:after{
+  border-color: transparent transparent #f3f3f3 transparent;
+}
+
+.ppl-stop-date{
+  font-size: 10px;
+  margin-top: 7px;
+  line-height: 14px;
+  font-family: 'Trebuchet MS', Helvetica, sans-serif;
+
+}
+
+
+
+
+
+.ppl-stop-date::selection, .ppl-stop::selection {
+  background: transparent; 
+}
+.ppl-stop-date::-moz-selection, .ppl-stop::-moz-selection{
+  background: transparent; 
+}

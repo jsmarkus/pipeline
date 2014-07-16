@@ -1,4 +1,4 @@
-/*global $,PipelineModel,debounce,Ruler*/
+/*global $,PipelineModel,debounce,Ruler,fmt*/
 
 
 
@@ -18,6 +18,12 @@ function Pipeline() {
   this._state = STATE_IDLE;
 
   this._stopMarkersByGuid = [];
+  this._fmt = {};
+
+  this.setFormatters({
+    tickLabel: fmt.tickLabel,
+    stopLabel: fmt.stopLabel
+  });
 
   this.model = new PipelineModel();
   this.render();
@@ -35,6 +41,14 @@ function Pipeline() {
 //  return new Interval();
 // };
 
+
+Pipeline.prototype.setFormatters = function(formatters) {
+  for (var fmtName in formatters) {
+    if (formatters.hasOwnProperty(fmtName)) {
+      this._fmt[fmtName] = formatters[fmtName];
+    }
+  }
+};
 
 Pipeline.prototype.render = function() {
   if (this.$) {
@@ -110,6 +124,26 @@ Pipeline.prototype.selectStop = function(stop) {
 
 // Pipeline.prototype.selectInterval = function(interval) {};
 
+Pipeline.prototype.getSelectedStopValue = function() {
+  var stop = this._selectedStop;
+  if (!stop) {
+    return null;
+  }
+  return stop.value || null;
+};
+
+Pipeline.prototype.getCenter = function() {
+  return ((this.dayStart + this.dayEnd) / 2) | 0;
+};
+
+Pipeline.prototype.setCenter = function(value) {
+  var currentCenterPx = this.dayToOffset(this.getCenter());
+  var newCenterPx = this.dayToOffset(value);
+  var scrollPx = this._getScrollPx();
+  var deltaScrollPx = currentCenterPx - newCenterPx;
+  this._scrollByPx(-deltaScrollPx);
+};
+
 Pipeline.prototype.getZoom = function() {
   return this._z;
 };
@@ -121,8 +155,18 @@ Pipeline.prototype.setZoom = function(zoom) {
   this._z = zoom;
   this._pixelsADay = Math.pow(2, zoom) * ZOOMING_RESOLUTION / ZOOMING_BASE_NUMBER;
 
+  var center = this.getSelectedStopValue();
+  if (null === center) {
+    center = this.getCenter();
+  }
+
+
   this._updateViewportInfo();
-  this._recalculatePositions();
+  this._recalculatePositions(true);
+  this._updateWidth();
+
+  setTimeout(this.setCenter.bind(this, center), ZOOMING_ANIMATION_DURATION);
+
 };
 
 Pipeline.prototype.zoomPlus = function() {
@@ -193,18 +237,31 @@ Pipeline.prototype.isStateWaitDrag = function() {
   return this._state === STATE_WAIT_DRAG;
 };
 
-Pipeline.prototype._recalculatePositions = function() {
+Pipeline.prototype._recalculatePositions = function(animate) {
   var currentStop = this.model.firstStop;
   while (currentStop) {
     var marker = this._stopMarkerByStop(currentStop);
-    marker.setOffset(this.dayToOffset(currentStop.value));
+    marker.setOffset(this.dayToOffset(currentStop.value), animate);
     currentStop = currentStop.next;
   }
 };
 
+Pipeline.prototype._scrollByPx = function(delta) {
+  var div = this.$.root[0];
+  div.scrollLeft = div.scrollLeft + delta;
+};
+
+Pipeline.prototype._getScrollPx = function() {
+  return this.$.root[0].scrollLeft;
+};
+
+Pipeline.prototype._getWidthPx = function() {
+  return this.$.root[0].clientWidth;
+};
+
 Pipeline.prototype._updateViewportInfo = function() {
-  var scrollStart = this.$.root[0].scrollLeft;
-  var width = this.$.root[0].clientWidth;
+  var scrollStart = this._getScrollPx();
+  var width = this._getWidthPx();
   var scrollEnd = scrollStart + width;
   var dayStart = this.offsetToDay(scrollStart);
   var dayEnd = this.offsetToDay(scrollEnd);
@@ -212,6 +269,12 @@ Pipeline.prototype._updateViewportInfo = function() {
   this.dayEnd = dayEnd;
   // console.log(dayStart, dayEnd);
   this._updateRuler();
+};
+
+Pipeline.prototype._updateWidth = function() {
+  var minWidth = this.dayToOffset(this.model.higherBound) + WIDTH_MARGIN;
+  var viewWidth = this.$.root[0].clientWidth;
+  this.$.wrapper.css('width', Math.max(minWidth, viewWidth));
 };
 
 Pipeline.prototype._updateRuler = function() {
@@ -331,14 +394,7 @@ Pipeline.prototype._onAddStop = function(stop) {
 Pipeline.prototype._onRemoveStop = function(stop) {};
 
 Pipeline.prototype._onBoundsChange = function() {
-  this.setBounds(this.model.lowerBound, this.model.higherBound);
-};
-
-Pipeline.prototype.setBounds = function(lower, higher) {
-  var higherOffset = this.dayToOffset(higher);
-  var lowerOffset = this.dayToOffset(lower);
-  console.log('lowerOffset', lowerOffset);
-  console.log('higherOffset', higherOffset);
+  this._updateWidth();
 };
 
 Pipeline.prototype._onChangeStopDay = function(stop) {
@@ -395,12 +451,25 @@ function StopMarker(options) {
 }
 
 StopMarker.prototype.render = function() {
+  var root = $('<div class="' + CLASS_STOP + '">');
+  var date = $('<div class="' + CLASS_STOP_DATE + '">');
+  var line = $('<div class="' + CLASS_STOP_LINE + '">');
+  root.append(line);
+  root.append(date);
+  date.text('123');
+  return root;
   return $('<div class="' + CLASS_STOP + '">');
 };
 
-StopMarker.prototype.setOffset = function(off) {
-  this.offset = off;
-  this.$.css('left', off);
+StopMarker.prototype.setOffset = function(offset, animate) {
+  this.offset = offset;
+  if (animate) {
+    this.$.animate({
+      'left': offset
+    }, ZOOMING_ANIMATION_DURATION);
+  } else {
+    this.$.css('left', offset);
+  }
 };
 
 StopMarker.prototype.getOffset = function() {
@@ -409,11 +478,11 @@ StopMarker.prototype.getOffset = function() {
 
 
 StopMarker.prototype.setSelected = function(value) {
-  value && this.$.addClass('active') || this.$.removeClass('active');
+  value && this.$.addClass(CLASS_ACTIVE) || this.$.removeClass(CLASS_ACTIVE);
 };
 
 StopMarker.prototype.setDragging = function(value) {
-  value && this.$.addClass('dragging') || this.$.removeClass('dragging');
+  value && this.$.addClass(CLASS_DRAGGING) || this.$.removeClass(CLASS_DRAGGING);
 };
 //-----------------------------
 
