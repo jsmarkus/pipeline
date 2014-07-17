@@ -52,33 +52,40 @@ Ruler.prototype.update = function(start, end) {
   var unit = zoomTable[zoom].unit;
   var ticker = isStartOf[unit];
   for (var d = start; d <= end; d++) {
-    var date = dayToTime(d);
+    date = dayToTime(d);
     if (ticker(date)) {
-      this.addTick(d);
+      this.addTick(d, unit);
     }
   }
   console.timeEnd('a');
 };
 
-Ruler.prototype.addTick = function(day) {
+Ruler.prototype.addTick = function(day, unit) {
   var t = new TickMarker();
   t.render();
   t.setOffset(this.masterView.dayToOffset(day));
+  t.setContent(this.masterView._fmt.tickLabel(day, dayToTime(day), unit));
   this.element.append(t.$);
 };
 
 //-----------------------------
-function TickMarker() {
-  this.$ = this.render();
-}
+function TickMarker() {};
 
 TickMarker.prototype.render = function() {
-  return $('<div class="' + CLASS_TICK + '">');
+  var root = $('<div class="' + CLASS_TICK + '">');
+  var content = $('<div class="' + CLASS_TICK_DATE + '">');
+  content.appendTo(root);
+  this.$content = content;
+  this.$ = root;
 };
 
 TickMarker.prototype.setOffset = function(off) {
   this.offset = off;
   this.$.css('left', off);
+};
+
+TickMarker.prototype.setContent = function(html) {
+  this.$content.html(html);
 };
 
 TickMarker.prototype.getOffset = function() {

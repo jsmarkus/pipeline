@@ -10,6 +10,7 @@ var CLASS_STOP = 'ppl-stop';
 var CLASS_STOP_DATE = 'ppl-stop-date';
 var CLASS_STOP_LINE = 'ppl-stop-line';
 var CLASS_TICK = 'ppl-ruler-tick base';
+var CLASS_TICK_DATE = 'base-item';
 var CLASS_INTERVAL = 'ppl-interval';
 var CLASS_INTERVAL_CONTAINER = 'ppl-interval-container';
 var CLASS_STOP_CONTAINER = 'ppl-stop-container';

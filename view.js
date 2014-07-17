@@ -20,10 +20,7 @@ function Pipeline() {
   this._stopMarkersByGuid = [];
   this._fmt = {};
 
-  this.setFormatters({
-    tickLabel: fmt.tickLabel,
-    stopLabel: fmt.stopLabel
-  });
+  this.setFormatters(fmt);
 
   this.model = new PipelineModel();
   this.render();
@@ -33,13 +30,6 @@ function Pipeline() {
 
   this.setZoom(7);
 }
-
-// Pipeline.prototype._createStop = function() {
-//  return new Stop();
-// };
-// Pipeline.prototype._createInterval = function() {
-//  return new Interval();
-// };
 
 
 Pipeline.prototype.setFormatters = function(formatters) {
@@ -99,20 +89,6 @@ Pipeline.prototype._renderRulerContainer = function() {
   return $('<div class="' + CLASS_RULER_CONTAINER + '">');
 };
 
-// Pipeline.prototype.getStopByIndex = function(index) {};
-
-// Pipeline.prototype.getStopByDay = function(day) {};
-
-// Pipeline.prototype.getIntervalByIndex = function(index) {};
-
-// Pipeline.prototype.getIntervalByDay = function(day) {};
-
-// Pipeline.prototype.addStop = function(day) {
-
-// };
-
-// Pipeline.prototype.removeStop = function(stop) {};
-
 Pipeline.prototype.selectStop = function(stop) {
   if (this._selectedStop) {
     this._stopMarkerByStop(this._selectedStop).setSelected(false);
@@ -121,8 +97,6 @@ Pipeline.prototype.selectStop = function(stop) {
   this._selectedStop = stop;
   this._stopMarkerByStop(stop).setSelected(true);
 };
-
-// Pipeline.prototype.selectInterval = function(interval) {};
 
 Pipeline.prototype.getSelectedStopValue = function() {
   var stop = this._selectedStop;
@@ -139,7 +113,6 @@ Pipeline.prototype.getCenter = function() {
 Pipeline.prototype.setCenter = function(value) {
   var currentCenterPx = this.dayToOffset(this.getCenter());
   var newCenterPx = this.dayToOffset(value);
-  var scrollPx = this._getScrollPx();
   var deltaScrollPx = currentCenterPx - newCenterPx;
   this._scrollByPx(-deltaScrollPx);
 };
@@ -303,7 +276,7 @@ Pipeline.prototype._onWaitDragTimeout = function() {
 };
 
 Pipeline.prototype._stopFromEvent = function(e) {
-  var guid = $(e.target).attr('guid');
+  var guid = $(e.currentTarget).attr('guid');
   if (!guid) {
     throw new Error('no guid in event.target');
   }
@@ -375,14 +348,22 @@ Pipeline.prototype._localOffsetFromEvent = function(e) {
 Pipeline.prototype._onMouseMove = function(e) {
   if (this.isStateDragging()) {
     var offset = this._localOffsetFromEvent(e);
-    offset = this.dayToOffset(this.offsetToDay(offset));
+    var day = this.offsetToDay(offset);
+    offset = this.dayToOffset(day); //<- rounding to one day
+
     if (this._dragMaxOffset !== null && offset >= this._dragMaxOffset) {
       offset = this._dragMaxOffset;
     }
     if (this._dragMinOffset !== null && offset <= this._dragMinOffset) {
       offset = this._dragMinOffset;
     }
-    this._stopMarkerByStop(this._selectedStop).setOffset(offset);
+
+    day = this.offsetToDay(offset); //TODO: store only min/max day, not offset, to avoid double conversion
+
+    this._updateStopMarker(
+      this._stopMarkerByStop(this._selectedStop),
+      day);
+
     return;
   }
 };
@@ -406,14 +387,20 @@ Pipeline.prototype._onChangeStopDay = function(stop) {
 
 Pipeline.prototype._addStopMarker = function(stop) {
   var day = stop.value;
-  var offset = this.dayToOffset(day);
   var marker = new StopMarker({
     guid: stop.guid
   });
-  marker.setOffset(offset);
+
+
   this.$.stopContainer.append(marker.$);
   this._registerStopMarker(marker, stop);
 
+  this._updateStopMarker(marker, day);
+};
+
+Pipeline.prototype._updateStopMarker = function(marker, day) {
+  marker.setOffset(this.dayToOffset(day));
+  marker.setContent(this._fmt.stopLabel(day, dayToTime(day)));
 };
 
 Pipeline.prototype._stopMarkerByStop = function(stop) {
@@ -454,11 +441,14 @@ StopMarker.prototype.render = function() {
   var root = $('<div class="' + CLASS_STOP + '">');
   var date = $('<div class="' + CLASS_STOP_DATE + '">');
   var line = $('<div class="' + CLASS_STOP_LINE + '">');
+  this.$content = date;
   root.append(line);
   root.append(date);
-  date.text('123');
   return root;
-  return $('<div class="' + CLASS_STOP + '">');
+};
+
+StopMarker.prototype.setContent = function(html) {
+  this.$content.html(html);
 };
 
 StopMarker.prototype.setOffset = function(offset, animate) {

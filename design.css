@@ -30,12 +30,13 @@
 }
 
 .ppl-ruler{
-  height: 10px;
-  padding-top: 20px;
+  height: 30px;
+  /*padding-top: 20px;*/
   background: #F8F8F8;
   border-bottom: 1px solid #E2E2E2;
   width: 100%;
   float: left;
+  position: relative;
 }
 .ppl-ruler-tick{
   width: 3px;
@@ -46,14 +47,15 @@
 }
 .ppl-ruler-tick.base{
   height: 20px;
-  position: relative;
-  top: -10px;
+  position: absolute;
+  top: 10px;
 }
 .base-item{
   position: absolute;
   left: 5px;
-  top: -4px;
+  top: -5px;
   font: 10px 'Trebuchet MS', Helvetica, sans-serif;
+  line-height: 8px;
 }
 
 .ppl-ruler-tick:first-child{
@@ -91,6 +93,7 @@
 .ppl-stop{
   position: absolute;
   width: 26px;
+  margin: -13px;
   text-align: center;
   height: 55px;
   border-radius: 7px;
@@ -116,10 +119,10 @@
 .ppl-stop.draggable{
   z-index: 3;
   cursor: ew-resize;
-  color: #fff;
+  /*color: #fff;*/
   border-color: #149bdf;
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.14);
-  text-shadow: 1px 1px #747474; 
+  /*text-shadow: 1px 1px #747474; */
 }
 
 .ppl-stop-date:before, .ppl-stop-date:after{
