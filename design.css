@@ -39,11 +39,10 @@
   position: relative;
 }
 .ppl-ruler-tick{
-  width: 3px;
+  width: 2px;
   height: 10px;
   background: #B9B9B9;
   float: left;
-  margin-left: 5px;
 }
 .ppl-ruler-tick.base{
   height: 20px;

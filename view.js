@@ -3,8 +3,9 @@
 
 
 function Pipeline() {
-  this._onStopMarkerClick = this._onStopMarkerClick.bind(this);
+  this._onStopContainerDoubleClick = this._onStopContainerDoubleClick.bind(this);
   this._onStopMarkerMouseDown = this._onStopMarkerMouseDown.bind(this);
+  this._onStopMarkerDoubleClick = this._onStopMarkerDoubleClick.bind(this);
   this._onIntervalClick = this._onIntervalClick.bind(this);
   this._onMouseUp = this._onMouseUp.bind(this);
   this._onMouseMove = this._onMouseMove.bind(this);
@@ -87,6 +88,10 @@ Pipeline.prototype._renderIntervalContainer = function() {
 
 Pipeline.prototype._renderRulerContainer = function() {
   return $('<div class="' + CLASS_RULER_CONTAINER + '">');
+};
+
+Pipeline.prototype._unselectAnyStop = function() {
+  this._selectedStop = null;
 };
 
 Pipeline.prototype.selectStop = function(stop) {
@@ -257,9 +262,10 @@ Pipeline.prototype._updateRuler = function() {
 Pipeline.prototype._initListeners = function() {
   var root = this.$.root;
   var body = $('body');
-  root.on('click', '.' + CLASS_STOP, this._onStopMarkerClick);
   root.on('click', '.' + CLASS_INTERVAL, this._onIntervalClick);
   root.on('mousedown', '.' + CLASS_STOP, this._onStopMarkerMouseDown);
+  root.on('dblclick', '.' + CLASS_STOP_CONTAINER, this._onStopContainerDoubleClick);
+  root.on('dblclick', '.' + CLASS_STOP, this._onStopMarkerDoubleClick);
   root.on('scroll', this._onRootScroll);
 
   body.on('mouseup', this._onMouseUp);
@@ -287,8 +293,18 @@ Pipeline.prototype._stopFromEvent = function(e) {
   return stop;
 };
 
-Pipeline.prototype._onStopMarkerClick = function(e) {
+Pipeline.prototype._onStopMarkerDoubleClick = function(e) {
+  e.preventDefault();
   var stop = this._stopFromEvent(e);
+  this.model.removeStop(stop);
+};
+
+Pipeline.prototype._onStopContainerDoubleClick = function(e) {
+  if (e.target !== this.$.stopContainer[0]) {
+    return;
+  }
+  var day = this.offsetToDay(e.clientX);
+  this.model.addStop(day);
 };
 
 Pipeline.prototype._onStopMarkerMouseDown = function(e) {
@@ -372,7 +388,9 @@ Pipeline.prototype._onAddStop = function(stop) {
   this._addStopMarker(stop);
 };
 
-Pipeline.prototype._onRemoveStop = function(stop) {};
+Pipeline.prototype._onRemoveStop = function(stop) {
+  this._removeStopMarker(stop);
+};
 
 Pipeline.prototype._onBoundsChange = function() {
   this._updateWidth();
@@ -384,6 +402,15 @@ Pipeline.prototype._onChangeStopDay = function(stop) {
   marker.setOffset(offset);
 };
 
+
+Pipeline.prototype._removeStopMarker = function(stop) {
+  var marker = this._stopMarkerByStop(stop);
+  if (this._selectedStop === stop) {
+    this._unselectAnyStop();
+  }
+  marker.$.remove();
+  this._unregisterStopMarker(marker);
+};
 
 Pipeline.prototype._addStopMarker = function(stop) {
   var day = stop.value;
@@ -421,6 +448,7 @@ Pipeline.prototype.destroy = function() {
   this.$.off('mousedown');
   this.$.off('mouseup');
   this.$.off('mousemove');
+  //TODO: review
 };
 
 //-----------------------------
