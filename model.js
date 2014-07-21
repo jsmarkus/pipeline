@@ -37,7 +37,7 @@ PipelineModel.prototype._detachInterval = function(interval) {
     interval.from = null;
   }
   if (interval.to) {
-    interval.to.nextInterval = null;
+    interval.to.prevInterval = null;
     interval.to = null;
   }
   if (interval === this._startInterval) {
@@ -69,9 +69,8 @@ PipelineModel.prototype._attachInterval = function(interval, fromStop, toStop) {
 PipelineModel.prototype._joinIntervals = function(removingStop) {
   var leftInterval = removingStop.prevInterval;
   var rightInterval = removingStop.nextInterval;
-
   var leftStop = leftInterval.from;
-  var rightStop = leftInterval.to;
+  var rightStop = rightInterval.to;
   this._detachInterval(rightInterval);
   this._attachInterval(leftInterval, leftStop, rightStop);
 };
