@@ -10,6 +10,7 @@ function PipelineModel() {
   this.firstStop = null;
   this._stopsByDay = {};
   this._stopsByGuid = {};
+  this._attachInterval(new Interval(), null, null);
 }
 
 PipelineModel.prototype.addStop = function(day) {
@@ -24,6 +25,87 @@ PipelineModel.prototype.addStop = function(day) {
 
   this.syncBounds();
   this.trigger('addStop', stop);
+
+  // var intervalToSplit = this.getBoundingInterval(day);
+
+  this._splitInterval(stop);
+};
+
+PipelineModel.prototype._detachInterval = function(interval) {
+  if (interval.from) {
+    interval.from.nextInterval = null;
+    interval.from = null;
+  }
+  if (interval.to) {
+    interval.to.nextInterval = null;
+    interval.to = null;
+  }
+  if (interval === this._startInterval) {
+    this._startInterval = null;
+  }
+};
+
+PipelineModel.prototype._attachInterval = function(interval, fromStop, toStop) {
+  if (!fromStop) {
+    if (!this._startInterval) {
+      this._startInterval = interval;
+    } else {
+      throw new Error('cannot attach staring interval twice');
+    }
+  } else {
+    fromStop.nextInterval = interval;
+  }
+
+  if (toStop) {
+    toStop.prevInterval = interval;
+  }
+
+  interval.from = fromStop;
+  interval.to = toStop;
+
+  this.trigger('changeInterval', interval);
+};
+
+PipelineModel.prototype._joinIntervals = function(removingStop) {
+  var leftInterval = removingStop.prevInterval;
+  var rightInterval = removingStop.nextInterval;
+
+  var leftStop = leftInterval.from;
+  var rightStop = leftInterval.to;
+  this._detachInterval(rightInterval);
+  this._attachInterval(leftInterval, leftStop, rightStop);
+};
+
+PipelineModel.prototype._splitInterval = function(insertedStop) {
+  var prevStop = insertedStop.prev;
+  var nextStop = insertedStop.next;
+  var leftInterval = prevStop ? prevStop.nextInterval : this._startInterval;
+  if (!leftInterval) {
+    throw new Error('integrity error: interval not found');
+  }
+  this._detachInterval(leftInterval);
+  var rightInterval = new Interval(insertedStop, nextStop);
+  this._attachInterval(rightInterval, insertedStop, nextStop);
+  this._attachInterval(leftInterval, prevStop, insertedStop);
+};
+
+// PipelineModel.prototype._addInterval = function(fromStop, toStop) {
+//   var interval = new Interval(fromStop, toStop);
+//   this._attachInterval(interval, fromStop, toStop);
+// };
+
+PipelineModel.prototype.getBoundingInterval = function(value) {
+  var prevStop = this.findPreviousStop(value);
+  var interval;
+  if (!prevStop) {
+    interval = this._startInterval;
+  } else {
+    interval = prevStop.nextInterval;
+  }
+  if (!interval) {
+    throw new Error('integrity error: interval not found');
+  }
+  return interval;
 };
 
 PipelineModel.prototype._registerStop = function(stop) {
@@ -50,6 +132,9 @@ PipelineModel.prototype.removeStop = function(stop) {
   var nextStop = stop.next;
   var prevStop = stop.prev;
 
+  this._joinIntervals(stop);
+
+
   if (nextStop) {
     nextStop.prev = prevStop;
   }
@@ -71,6 +156,7 @@ PipelineModel.prototype.removeStop = function(stop) {
   this.trigger('removeStop', stop);
 
   this._unregisterStop(stop);
+
 };
 
 
@@ -176,5 +262,12 @@ function Stop(value) {
   this.value = value;
   this.next = null;
   this.prev = null;
+  this.guid = GUID();
+}
+//--------------
+
+function Interval(from, to) {
+  this.from = from;
+  this.to = to;
   this.guid = GUID();
 }

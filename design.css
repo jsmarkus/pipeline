@@ -35,7 +35,6 @@
   background: #F8F8F8;
   border-bottom: 1px solid #E2E2E2;
   width: 100%;
-  float: left;
   position: relative;
 }
 .ppl-ruler-tick{
@@ -57,17 +56,14 @@
   line-height: 8px;
 }
 
-.ppl-ruler-tick:first-child{
-  margin: 0;
-}
 .ppl-interval-container{
   height: 50px;
-  margin-top: 5px;
-  float: left;
   background: #eee;
+  position: relative;
+  /*background: #E2E0FC;*/
 }
 .ppl-interval{
-  float: left;
+  position: absolute;
   background: linear-gradient(to bottom, #0092b9 0%,#007da0 100%); 
   border-radius: 7px;
   height: 100%;
@@ -87,12 +83,11 @@
   height: 72px;
   width: 100%;
   position: relative;
-  float: left;
 }
 .ppl-stop{
   position: absolute;
   width: 26px;
-  margin: -13px;
+  margin-left: -13px;
   text-align: center;
   height: 55px;
   border-radius: 7px;

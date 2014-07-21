@@ -15,10 +15,12 @@ function Pipeline() {
   this._onRemoveStop = this._onRemoveStop.bind(this);
   this._onChangeStopDay = this._onChangeStopDay.bind(this);
   this._onBoundsChange = this._onBoundsChange.bind(this);
+  this._onChangeInterval = this._onChangeInterval.bind(this);
 
   this._state = STATE_IDLE;
 
-  this._stopMarkersByGuid = [];
+  this._stopMarkersByGuid = {};
+  this._intervalMarkersByGuid = {};
   this._fmt = {};
 
   this.setFormatters(fmt);
@@ -190,6 +192,9 @@ Pipeline.prototype.setStateDragging = function() {
   if (nextStop) {
     this._dragMaxOffset = this.dayToOffset(nextStop.value - 1);
   }
+
+  this._dragIntervalLeft = this._selectedStop.prevInterval;
+  this._dragIntervalRight = this._selectedStop.nextInterval;
 };
 
 Pipeline.prototype.isStateDragging = function() {
@@ -199,6 +204,8 @@ Pipeline.prototype.isStateDragging = function() {
 Pipeline.prototype.setStateIdle = function() {
   console.log('STATE_IDLE');
   this._state = STATE_IDLE;
+  this._dragIntervalLeft = null;
+  this._dragIntervalRight = null;
 };
 
 Pipeline.prototype.isStateIdle = function() {
@@ -275,6 +282,7 @@ Pipeline.prototype._initListeners = function() {
   this.model.bind('removeStop', this._onRemoveStop);
   this.model.bind('changeStopDay', this._onChangeStopDay);
   this.model.bind('boundsChange', this._onBoundsChange);
+  this.model.bind('changeInterval', this._onChangeInterval);
 };
 
 Pipeline.prototype._onWaitDragTimeout = function() {
@@ -380,6 +388,9 @@ Pipeline.prototype._onMouseMove = function(e) {
       this._stopMarkerByStop(this._selectedStop),
       day);
 
+    this._updateIntervalMarkerStart(this._dragIntervalRight, day);
+    this._updateIntervalMarkerEnd(this._dragIntervalLeft, day);
+
     return;
   }
 };
@@ -390,6 +401,11 @@ Pipeline.prototype._onAddStop = function(stop) {
 
 Pipeline.prototype._onRemoveStop = function(stop) {
   this._removeStopMarker(stop);
+};
+
+Pipeline.prototype._onChangeInterval = function(interval) {
+  console.log(interval);
+  this._updateIntervalMarker(interval);
 };
 
 Pipeline.prototype._onBoundsChange = function() {
@@ -412,6 +428,36 @@ Pipeline.prototype._removeStopMarker = function(stop) {
   this._unregisterStopMarker(marker);
 };
 
+
+Pipeline.prototype._updateIntervalMarkerStart = function(interval, value) {
+  var marker = this._intervalMarkerByInterval(interval);
+  var start = this.dayToOffset(value);
+  var end = interval.to ? this.dayToOffset(interval.to.value) : Infinity;
+  marker.setBounds(start, end);
+};
+
+Pipeline.prototype._updateIntervalMarkerEnd = function(interval, value) {
+  var marker = this._intervalMarkerByInterval(interval);
+  var start = interval.from ? this.dayToOffset(interval.from.value) : 0;
+  var end = this.dayToOffset(value);
+  marker.setBounds(start, end);
+};
+
+Pipeline.prototype._updateIntervalMarker = function(interval) {
+  var marker = this._intervalMarkerByInterval(interval);
+  if (!marker) {
+    marker = new IntervalMarker({
+      guid: interval.guid
+    });
+    this.$.intervalContainer.append(marker.$);
+    this._registerIntervalMarker(marker, interval);
+  }
+
+  var left = interval.from ? this.dayToOffset(interval.from.value) : 0;
+  var right = interval.to ? this.dayToOffset(interval.to.value) : Infinity;
+  marker.setBounds(left, right);
+};
+
 Pipeline.prototype._addStopMarker = function(stop) {
   var day = stop.value;
   var marker = new StopMarker({
@@ -432,6 +478,14 @@ Pipeline.prototype._updateStopMarker = function(marker, day) {
 
 Pipeline.prototype._stopMarkerByStop = function(stop) {
   return this._stopMarkersByGuid[stop.guid];
+};
+
+Pipeline.prototype._intervalMarkerByInterval = function(interval) {
+  return this._intervalMarkersByGuid[interval.guid];
+};
+
+Pipeline.prototype._registerIntervalMarker = function(marker, interval) {
+  this._intervalMarkersByGuid[interval.guid] = marker;
 };
 
 Pipeline.prototype._registerStopMarker = function(marker, stop) {
@@ -504,8 +558,33 @@ StopMarker.prototype.setDragging = function(value) {
 };
 //-----------------------------
 
-function Interval() {}
+function IntervalMarker(options) {
+  if (!options) {
+    throw new Error('no options');
+  }
+  if (!options.guid) {
+    throw new Error('no guid');
+  }
 
-Interval.prototype.render = function() {
+  this.$ = this.render();
+  this.$.attr('guid', this.guid = options.guid);
+}
+
+IntervalMarker.prototype.setBounds = function(left, right) {
+  this.$.css('left', left);
+  if (right === Infinity) {
+    this.$.css({
+      'width': '',
+      'right': 0
+    });
+  } else {
+    this.$.css({
+      'width': right - left,
+      'right': ''
+    });
+  }
+};
+
+IntervalMarker.prototype.render = function() {
   return $('<div class="' + CLASS_INTERVAL + '">');
 };
