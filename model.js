@@ -72,6 +72,7 @@ PipelineModel.prototype._joinIntervals = function(removingStop) {
   var leftStop = leftInterval.from;
   var rightStop = rightInterval.to;
   this._detachInterval(rightInterval);
+  this.trigger('removeInterval', rightInterval);
   this._attachInterval(leftInterval, leftStop, rightStop);
 };
 

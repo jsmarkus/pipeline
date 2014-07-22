@@ -16,6 +16,7 @@ function Pipeline() {
   this._onChangeStopDay = this._onChangeStopDay.bind(this);
   this._onBoundsChange = this._onBoundsChange.bind(this);
   this._onChangeInterval = this._onChangeInterval.bind(this);
+  this._onRemoveInterval = this._onRemoveInterval.bind(this);
 
   this._state = STATE_IDLE;
 
@@ -283,6 +284,7 @@ Pipeline.prototype._initListeners = function() {
   this.model.bind('changeStopDay', this._onChangeStopDay);
   this.model.bind('boundsChange', this._onBoundsChange);
   this.model.bind('changeInterval', this._onChangeInterval);
+  this.model.bind('removeInterval', this._onRemoveInterval);
 };
 
 Pipeline.prototype._onWaitDragTimeout = function() {
@@ -404,8 +406,11 @@ Pipeline.prototype._onRemoveStop = function(stop) {
 };
 
 Pipeline.prototype._onChangeInterval = function(interval) {
-  console.log(interval);
   this._updateIntervalMarker(interval);
+};
+
+Pipeline.prototype._onRemoveInterval = function(interval) {
+  this._removeIntervalMarker(interval);
 };
 
 Pipeline.prototype._onBoundsChange = function() {
@@ -426,6 +431,13 @@ Pipeline.prototype._removeStopMarker = function(stop) {
   }
   marker.$.remove();
   this._unregisterStopMarker(marker);
+};
+
+
+Pipeline.prototype._removeIntervalMarker = function(interval) {
+  var marker = this._intervalMarkerByInterval(interval);
+  this._unregisterIntervalMarker(interval);
+  marker.$.remove();
 };
 
 
@@ -490,6 +502,10 @@ Pipeline.prototype._registerIntervalMarker = function(marker, interval) {
 
 Pipeline.prototype._registerStopMarker = function(marker, stop) {
   this._stopMarkersByGuid[stop.guid] = marker;
+};
+
+Pipeline.prototype._unregisterIntervalMarker = function(interval) {
+  delete this._intervalMarkersByGuid[interval.guid];
 };
 
 Pipeline.prototype._unregisterStopMarker = function(stop) {
