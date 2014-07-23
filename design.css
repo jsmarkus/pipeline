@@ -18,6 +18,7 @@
 
 .ppl-root-wrapper{
   height: 100%;
+  position: relative;
 }
 
 .ppl-root-scrollbody{
@@ -162,4 +163,14 @@
 }
 .ppl-stop-date::-moz-selection, .ppl-stop::-moz-selection{
   background: transparent; 
+}
+
+
+.ppl-hair {
+  width:1px;
+  height:100%;
+  border-left: 1px dotted red;
+  position: absolute;
+  /*z-index: 100;*/
+  top:0;
 }

@@ -10,8 +10,15 @@ function PipelineModel() {
   this.firstStop = null;
   this._stopsByDay = {};
   this._stopsByGuid = {};
-  this._attachInterval(new Interval(), null, null);
+  this._intervalsByGuid = {};
+  this._attachInterval(this._createInterval(), null, null);
 }
+
+PipelineModel.prototype._createInterval = function(fromStop, toStop) {
+  var interval = new Interval(fromStop, toStop);
+  this._registerInterval(interval);
+  return interval;
+};
 
 PipelineModel.prototype.addStop = function(day) {
   if (this.stopByDay(day)) {
@@ -50,7 +57,7 @@ PipelineModel.prototype._attachInterval = function(interval, fromStop, toStop) {
     if (!this._startInterval) {
       this._startInterval = interval;
     } else {
-      throw new Error('cannot attach staring interval twice');
+      throw new Error('cannot attach starting interval twice');
     }
   } else {
     fromStop.nextInterval = interval;
@@ -73,6 +80,8 @@ PipelineModel.prototype._joinIntervals = function(removingStop) {
   var rightStop = rightInterval.to;
   this._detachInterval(rightInterval);
   this.trigger('removeInterval', rightInterval);
+  this._unregisterInterval(rightInterval);
+  this._detachInterval(leftInterval);
   this._attachInterval(leftInterval, leftStop, rightStop);
 };
 
@@ -84,7 +93,7 @@ PipelineModel.prototype._splitInterval = function(insertedStop) {
     throw new Error('integrity error: interval not found');
   }
   this._detachInterval(leftInterval);
-  var rightInterval = new Interval(insertedStop, nextStop);
+  var rightInterval = this._createInterval(insertedStop, nextStop);
   this._attachInterval(rightInterval, insertedStop, nextStop);
   this._attachInterval(leftInterval, prevStop, insertedStop);
 };
@@ -113,6 +122,14 @@ PipelineModel.prototype._registerStop = function(stop) {
   this._stopsByGuid[stop.guid] = stop;
 };
 
+PipelineModel.prototype._registerInterval = function(interval) {
+  this._intervalsByGuid[interval.guid] = interval;
+};
+
+PipelineModel.prototype._unregisterInterval = function(interval) {
+  delete this._intervalsByGuid[interval.guid];
+};
+
 PipelineModel.prototype._unregisterStop = function(stop) {
   delete this._stopsByDay[stop.value];
   delete this._stopsByGuid[stop.guid];
@@ -125,6 +142,10 @@ PipelineModel.prototype.stopByDay = function(day) {
 
 PipelineModel.prototype.stopByGuid = function(guid) {
   return this._stopsByGuid[guid] || null;
+};
+
+PipelineModel.prototype.intervalByGuid = function(guid) {
+  return this._intervalsByGuid[guid] || null;
 };
 
 PipelineModel.prototype.removeStop = function(stop) {

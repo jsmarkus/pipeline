@@ -54,6 +54,7 @@ Pipeline.prototype.render = function() {
 
 
   var wrapper = this.$.wrapper = this._renderWrapper();
+  var hair = this.$.hair = this._renderHair();
   var stopContainer = this.$.stopContainer = this._renderStopContainer();
   var intervalContainer = this.$.intervalContainer = this._renderIntervalContainer();
   var rulerContainer = this.$.rulerContainer = this._renderRulerContainer();
@@ -64,6 +65,7 @@ Pipeline.prototype.render = function() {
   wrapper.append(rulerContainer);
   wrapper.append(intervalContainer);
   wrapper.append(stopContainer);
+  wrapper.append(hair);
 
   this.$.root = root;
 
@@ -83,6 +85,10 @@ Pipeline.prototype._renderStopContainer = function() {
 
 Pipeline.prototype._renderWrapper = function() {
   return $('<div class="' + CLASS_WRAPPER + '">');
+};
+
+Pipeline.prototype._renderHair = function() {
+  return $('<div class="' + CLASS_HAIR + '">');
 };
 
 Pipeline.prototype._renderIntervalContainer = function() {
@@ -225,11 +231,16 @@ Pipeline.prototype.isStateWaitDrag = function() {
 
 Pipeline.prototype._recalculatePositions = function(animate) {
   var currentStop = this.model.firstStop;
+  this._updateIntervalMarker(this.model._startInterval);
   while (currentStop) {
     var marker = this._stopMarkerByStop(currentStop);
     marker.setOffset(this.dayToOffset(currentStop.value), animate);
+
+    this._updateIntervalMarker(currentStop.nextInterval);
+
     currentStop = currentStop.next;
   }
+  this._updateHair();
 };
 
 Pipeline.prototype._scrollByPx = function(delta) {
@@ -261,6 +272,14 @@ Pipeline.prototype._updateWidth = function() {
   var minWidth = this.dayToOffset(this.model.higherBound) + WIDTH_MARGIN;
   var viewWidth = this.$.root[0].clientWidth;
   this.$.wrapper.css('width', Math.max(minWidth, viewWidth));
+};
+
+Pipeline.prototype._updateHair = function() {
+  var now = timeToDay(new Date());
+  var offset = this.dayToOffset(now);
+  this.$.hair.css({
+    'left': offset
+  });
 };
 
 Pipeline.prototype._updateRuler = function() {
@@ -303,6 +322,18 @@ Pipeline.prototype._stopFromEvent = function(e) {
   return stop;
 };
 
+Pipeline.prototype._intervalFromEvent = function(e) {
+  var guid = $(e.currentTarget).attr('guid');
+  if (!guid) {
+    throw new Error('no guid in event.target');
+  }
+  var interval = this.model.intervalByGuid(guid);
+  if (!interval) {
+    throw new Error('interval not found');
+  }
+  return interval;
+};
+
 Pipeline.prototype._onStopMarkerDoubleClick = function(e) {
   e.preventDefault();
   var stop = this._stopFromEvent(e);
@@ -313,7 +344,8 @@ Pipeline.prototype._onStopContainerDoubleClick = function(e) {
   if (e.target !== this.$.stopContainer[0]) {
     return;
   }
-  var day = this.offsetToDay(e.clientX);
+
+  var day = this.offsetToDay(this._localOffsetFromEvent(e));
   this.model.addStop(day);
 };
 
@@ -332,7 +364,10 @@ Pipeline.prototype._onRootScroll = function() {
   this._updateViewportInfo();
 };
 
-Pipeline.prototype._onIntervalClick = function() {};
+Pipeline.prototype._onIntervalClick = function(e) {
+  var interval = this._intervalFromEvent(e);
+  debugger
+};
 
 Pipeline.prototype._onMouseUp = function() {
   if (this.isStateWaitDrag()) {
@@ -455,7 +490,7 @@ Pipeline.prototype._updateIntervalMarkerEnd = function(interval, value) {
   marker.setBounds(start, end);
 };
 
-Pipeline.prototype._updateIntervalMarker = function(interval) {
+Pipeline.prototype._updateIntervalMarker = function(interval, animate) {
   var marker = this._intervalMarkerByInterval(interval);
   if (!marker) {
     marker = new IntervalMarker({
@@ -467,7 +502,7 @@ Pipeline.prototype._updateIntervalMarker = function(interval) {
 
   var left = interval.from ? this.dayToOffset(interval.from.value) : 0;
   var right = interval.to ? this.dayToOffset(interval.to.value) : Infinity;
-  marker.setBounds(left, right);
+  marker.setBounds(left, right, animate);
 };
 
 Pipeline.prototype._addStopMarker = function(stop) {
@@ -586,15 +621,30 @@ function IntervalMarker(options) {
   this.$.attr('guid', this.guid = options.guid);
 }
 
-IntervalMarker.prototype.setBounds = function(left, right) {
-  this.$.css('left', left);
+IntervalMarker.prototype.setBounds = function(left, right, animate) {
+  var func;
+  var el = this.$;
+  if (animate) {
+    func = function(params) {
+      el.animate(params, ZOOMING_ANIMATION_DURATION);
+    };
+  } else {
+    func = function(params) {
+      el.css(params);
+    };
+  }
+
+
+  func({
+    'left': left
+  });
   if (right === Infinity) {
-    this.$.css({
+    func({
       'width': '',
       'right': 0
     });
   } else {
-    this.$.css({
+    func({
       'width': right - left,
       'right': ''
     });

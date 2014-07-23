@@ -16,6 +16,7 @@ var CLASS_INTERVAL_CONTAINER = 'ppl-interval-container';
 var CLASS_STOP_CONTAINER = 'ppl-stop-container';
 var CLASS_RULER_CONTAINER = 'ppl-ruler';
 var CLASS_WRAPPER = 'ppl-root-wrapper';
+var CLASS_HAIR = 'ppl-hair';
 
 var CLASS_DRAGGING = 'draggable';
 var CLASS_HOVER = 'hover';
