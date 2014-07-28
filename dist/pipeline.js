@@ -1,4 +1,4 @@
-/*! pipeline - v0.0.0 - 2014-07-15
+/*! pipeline - v0.0.0 - 2014-07-28
 * Copyright (c) 2014 Plarium; Licensed MIT */
 window.Pipeline = (function() {
 function timeToDay(time) {
@@ -28,6 +28,80 @@ function debounce(func, wait, immediate) {
     }
   };
 };
+var fmt = (function() {
+  var fmt = {};
+
+  fmt.months = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec'
+  ];
+
+  fmt.tick_year5 = function(time) {
+    return time.getFullYear();
+  };
+  fmt.tick_year = function(time) {
+    return time.getFullYear();
+  };
+  fmt.tick_quarter = function(time) {
+    var month = time.getMonth();
+    var parts = [this.getMonthName(time)];
+    if (0 === month) {
+      parts.push(time.getFullYear());
+    }
+    return parts.join('<br>');
+  };
+  fmt.tick_month = function(time) {
+    var month = time.getMonth();
+    var parts = [this.getMonthName(time)];
+    if (0 === month) {
+      parts.push(time.getFullYear());
+    }
+    return parts.join('<br>');
+  };
+
+  fmt.tick_decade = function(time) {
+    var month = time.getMonth();
+    var date = time.getDate();
+    var parts = [date];
+    if (1 === date) {
+      parts.push(this.getMonthName(time));
+      if (0 === month) {
+        parts.push(time.getFullYear());
+      }
+    }
+    return parts.join('<br>');
+  };
+
+
+  fmt.getMonthName = function(time) {
+    return this.months[time.getMonth()];
+  };
+
+  fmt.tickLabel = function(day, time, unit) {
+    var method = 'tick_' + unit;
+    return this[method](time);
+  };
+
+  fmt.stopLabel = function(day, time) {
+    var yearLabel = time.getFullYear();
+    var dateLabel = time.getDate();
+
+    var monthLabel = this.getMonthName(time);
+    return [dateLabel, monthLabel, yearLabel].join('<br />');
+  };
+
+  return fmt;
+}());
 var MS_IN_DAY = 60 * 60 * 24 * 1000;
 var START_DAY = timeToDay(new Date(2000, 0, 0));
 
@@ -35,21 +109,32 @@ var STATE_IDLE = 'idle';
 var STATE_WAIT_DRAG = 'wait';
 var STATE_DRAGGING = 'dragging';
 
-var CLASS_ROOT = 'ppl-root';
-var CLASS_STOP = 'ppl-stop-marker';
-var CLASS_TICK = 'ppl-tick-marker';
+var CLASS_ROOT = 'ppl-root ppl-root-scrollbody';
+var CLASS_STOP = 'ppl-stop';
+var CLASS_STOP_DATE = 'ppl-stop-date';
+var CLASS_STOP_LINE = 'ppl-stop-line';
+var CLASS_TICK = 'ppl-ruler-tick base';
+var CLASS_TICK_DATE = 'base-item';
 var CLASS_INTERVAL = 'ppl-interval';
 var CLASS_INTERVAL_CONTAINER = 'ppl-interval-container';
 var CLASS_STOP_CONTAINER = 'ppl-stop-container';
-var CLASS_RULER_CONTAINER = 'ppl-ruler-container';
-var CLASS_WRAPPER = 'ppl-wrapper';
+var CLASS_RULER_CONTAINER = 'ppl-ruler';
+var CLASS_WRAPPER = 'ppl-root-wrapper';
+var CLASS_HAIR = 'ppl-hair';
+
+var CLASS_DRAGGING = 'draggable';
+var CLASS_HOVER = 'hover';
+var CLASS_ACTIVE = 'active';
 
 var ZOOMING_BASE_NUMBER = 128;
 var ZOOMING_MAX = 7;
 var ZOOMING_RESOLUTION = 5; //, px/unit
+var ZOOMING_ANIMATION_DURATION = 150; //, ms
 
 var DRAG_TIMEOUT = 200; //, ms
 var SCROLL_TIMEOUT = 300; //, ms
+
+var WIDTH_MARGIN = 200; //, px
 var MicroEvent = function() {};
 MicroEvent.prototype = {
   bind: function(event, fct) {
@@ -96,7 +181,15 @@ function PipelineModel() {
   this.firstStop = null;
   this._stopsByDay = {};
   this._stopsByGuid = {};
+  this._intervalsByGuid = {};
+  this._attachInterval(this._createInterval(), null, null);
 }
+
+PipelineModel.prototype._createInterval = function(fromStop, toStop) {
+  var interval = new Interval(fromStop, toStop);
+  this._registerInterval(interval);
+  return interval;
+};
 
 PipelineModel.prototype.addStop = function(day) {
   if (this.stopByDay(day)) {
@@ -110,11 +203,102 @@ PipelineModel.prototype.addStop = function(day) {
 
   this.syncBounds();
   this.trigger('addStop', stop);
+
+  // var intervalToSplit = this.getBoundingInterval(day);
+
+  this._splitInterval(stop);
+};
+
+PipelineModel.prototype._detachInterval = function(interval) {
+  if (interval.from) {
+    interval.from.nextInterval = null;
+    interval.from = null;
+  }
+  if (interval.to) {
+    interval.to.prevInterval = null;
+    interval.to = null;
+  }
+  if (interval === this._startInterval) {
+    this._startInterval = null;
+  }
+};
+
+PipelineModel.prototype._attachInterval = function(interval, fromStop, toStop) {
+  if (!fromStop) {
+    if (!this._startInterval) {
+      this._startInterval = interval;
+    } else {
+      throw new Error('cannot attach starting interval twice');
+    }
+  } else {
+    fromStop.nextInterval = interval;
+  }
+
+  if (toStop) {
+    toStop.prevInterval = interval;
+  }
+
+  interval.from = fromStop;
+  interval.to = toStop;
+
+  this.trigger('changeInterval', interval);
+};
+
+PipelineModel.prototype._joinIntervals = function(removingStop) {
+  var leftInterval = removingStop.prevInterval;
+  var rightInterval = removingStop.nextInterval;
+  var leftStop = leftInterval.from;
+  var rightStop = rightInterval.to;
+  this._detachInterval(rightInterval);
+  this.trigger('removeInterval', rightInterval);
+  this._unregisterInterval(rightInterval);
+  this._detachInterval(leftInterval);
+  this._attachInterval(leftInterval, leftStop, rightStop);
+};
+
+PipelineModel.prototype._splitInterval = function(insertedStop) {
+  var prevStop = insertedStop.prev;
+  var nextStop = insertedStop.next;
+  var leftInterval = prevStop ? prevStop.nextInterval : this._startInterval;
+  if (!leftInterval) {
+    throw new Error('integrity error: interval not found');
+  }
+  this._detachInterval(leftInterval);
+  var rightInterval = this._createInterval(insertedStop, nextStop);
+  this._attachInterval(rightInterval, insertedStop, nextStop);
+  this._attachInterval(leftInterval, prevStop, insertedStop);
+};
+
+// PipelineModel.prototype._addInterval = function(fromStop, toStop) {
+//   var interval = new Interval(fromStop, toStop);
+//   this._attachInterval(interval, fromStop, toStop);
+// };
+
+PipelineModel.prototype.getBoundingInterval = function(value) {
+  var prevStop = this.findPreviousStop(value);
+  var interval;
+  if (!prevStop) {
+    interval = this._startInterval;
+  } else {
+    interval = prevStop.nextInterval;
+  }
+  if (!interval) {
+    throw new Error('integrity error: interval not found');
+  }
+  return interval;
 };
 
 PipelineModel.prototype._registerStop = function(stop) {
   this._stopsByDay[stop.value] = stop;
   this._stopsByGuid[stop.guid] = stop;
+};
+
+PipelineModel.prototype._registerInterval = function(interval) {
+  this._intervalsByGuid[interval.guid] = interval;
+};
+
+PipelineModel.prototype._unregisterInterval = function(interval) {
+  delete this._intervalsByGuid[interval.guid];
 };
 
 PipelineModel.prototype._unregisterStop = function(stop) {
@@ -131,10 +315,17 @@ PipelineModel.prototype.stopByGuid = function(guid) {
   return this._stopsByGuid[guid] || null;
 };
 
+PipelineModel.prototype.intervalByGuid = function(guid) {
+  return this._intervalsByGuid[guid] || null;
+};
+
 PipelineModel.prototype.removeStop = function(stop) {
   //TODO: check if it is mine
   var nextStop = stop.next;
   var prevStop = stop.prev;
+
+  this._joinIntervals(stop);
+
 
   if (nextStop) {
     nextStop.prev = prevStop;
@@ -157,6 +348,7 @@ PipelineModel.prototype.removeStop = function(stop) {
   this.trigger('removeStop', stop);
 
   this._unregisterStop(stop);
+
 };
 
 
@@ -264,6 +456,13 @@ function Stop(value) {
   this.prev = null;
   this.guid = GUID();
 }
+//--------------
+
+function Interval(from, to) {
+  this.from = from;
+  this.to = to;
+  this.guid = GUID();
+}
 var zoomTable = [{
   unit: 'year5'
 }, {
@@ -316,28 +515,31 @@ Ruler.prototype.update = function(start, end) {
   var unit = zoomTable[zoom].unit;
   var ticker = isStartOf[unit];
   for (var d = start; d <= end; d++) {
-    var date = dayToTime(d);
+    date = dayToTime(d);
     if (ticker(date)) {
-      this.addTick(d);
+      this.addTick(d, unit);
     }
   }
   console.timeEnd('a');
 };
 
-Ruler.prototype.addTick = function(day) {
+Ruler.prototype.addTick = function(day, unit) {
   var t = new TickMarker();
   t.render();
   t.setOffset(this.masterView.dayToOffset(day));
+  t.setContent(this.masterView._fmt.tickLabel(day, dayToTime(day), unit));
   this.element.append(t.$);
 };
 
 //-----------------------------
-function TickMarker() {
-  this.$ = this.render();
-}
+function TickMarker() {};
 
 TickMarker.prototype.render = function() {
-  return $('<div class="' + CLASS_TICK + '">');
+  var root = $('<div class="' + CLASS_TICK + '">');
+  var content = $('<div class="' + CLASS_TICK_DATE + '">');
+  content.appendTo(root);
+  this.$content = content;
+  this.$ = root;
 };
 
 TickMarker.prototype.setOffset = function(off) {
@@ -345,12 +547,17 @@ TickMarker.prototype.setOffset = function(off) {
   this.$.css('left', off);
 };
 
+TickMarker.prototype.setContent = function(html) {
+  this.$content.html(html);
+};
+
 TickMarker.prototype.getOffset = function() {
   return this.offset;
 };
 function Pipeline() {
-  this._onStopMarkerClick = this._onStopMarkerClick.bind(this);
+  this._onStopContainerDoubleClick = this._onStopContainerDoubleClick.bind(this);
   this._onStopMarkerMouseDown = this._onStopMarkerMouseDown.bind(this);
+  this._onStopMarkerDoubleClick = this._onStopMarkerDoubleClick.bind(this);
   this._onIntervalClick = this._onIntervalClick.bind(this);
   this._onMouseUp = this._onMouseUp.bind(this);
   this._onMouseMove = this._onMouseMove.bind(this);
@@ -360,10 +567,16 @@ function Pipeline() {
   this._onRemoveStop = this._onRemoveStop.bind(this);
   this._onChangeStopDay = this._onChangeStopDay.bind(this);
   this._onBoundsChange = this._onBoundsChange.bind(this);
+  this._onChangeInterval = this._onChangeInterval.bind(this);
+  this._onRemoveInterval = this._onRemoveInterval.bind(this);
 
   this._state = STATE_IDLE;
 
-  this._stopMarkersByGuid = [];
+  this._stopMarkersByGuid = {};
+  this._intervalMarkersByGuid = {};
+  this._fmt = {};
+
+  this.setFormatters(fmt);
 
   this.model = new PipelineModel();
   this.render();
@@ -374,13 +587,14 @@ function Pipeline() {
   this.setZoom(7);
 }
 
-// Pipeline.prototype._createStop = function() {
-//  return new Stop();
-// };
-// Pipeline.prototype._createInterval = function() {
-//  return new Interval();
-// };
 
+Pipeline.prototype.setFormatters = function(formatters) {
+  for (var fmtName in formatters) {
+    if (formatters.hasOwnProperty(fmtName)) {
+      this._fmt[fmtName] = formatters[fmtName];
+    }
+  }
+};
 
 Pipeline.prototype.render = function() {
   if (this.$) {
@@ -392,6 +606,7 @@ Pipeline.prototype.render = function() {
 
 
   var wrapper = this.$.wrapper = this._renderWrapper();
+  var hair = this.$.hair = this._renderHair();
   var stopContainer = this.$.stopContainer = this._renderStopContainer();
   var intervalContainer = this.$.intervalContainer = this._renderIntervalContainer();
   var rulerContainer = this.$.rulerContainer = this._renderRulerContainer();
@@ -402,6 +617,7 @@ Pipeline.prototype.render = function() {
   wrapper.append(rulerContainer);
   wrapper.append(intervalContainer);
   wrapper.append(stopContainer);
+  wrapper.append(hair);
 
   this.$.root = root;
 
@@ -423,6 +639,10 @@ Pipeline.prototype._renderWrapper = function() {
   return $('<div class="' + CLASS_WRAPPER + '">');
 };
 
+Pipeline.prototype._renderHair = function() {
+  return $('<div class="' + CLASS_HAIR + '">');
+};
+
 Pipeline.prototype._renderIntervalContainer = function() {
   return $('<div class="' + CLASS_INTERVAL_CONTAINER + '">');
 };
@@ -431,19 +651,9 @@ Pipeline.prototype._renderRulerContainer = function() {
   return $('<div class="' + CLASS_RULER_CONTAINER + '">');
 };
 
-// Pipeline.prototype.getStopByIndex = function(index) {};
-
-// Pipeline.prototype.getStopByDay = function(day) {};
-
-// Pipeline.prototype.getIntervalByIndex = function(index) {};
-
-// Pipeline.prototype.getIntervalByDay = function(day) {};
-
-// Pipeline.prototype.addStop = function(day) {
-
-// };
-
-// Pipeline.prototype.removeStop = function(stop) {};
+Pipeline.prototype._unselectAnyStop = function() {
+  this._selectedStop = null;
+};
 
 Pipeline.prototype.selectStop = function(stop) {
   if (this._selectedStop) {
@@ -454,7 +664,24 @@ Pipeline.prototype.selectStop = function(stop) {
   this._stopMarkerByStop(stop).setSelected(true);
 };
 
-// Pipeline.prototype.selectInterval = function(interval) {};
+Pipeline.prototype.getSelectedStopValue = function() {
+  var stop = this._selectedStop;
+  if (!stop) {
+    return null;
+  }
+  return stop.value || null;
+};
+
+Pipeline.prototype.getCenter = function() {
+  return ((this.dayStart + this.dayEnd) / 2) | 0;
+};
+
+Pipeline.prototype.setCenter = function(value) {
+  var currentCenterPx = this.dayToOffset(this.getCenter());
+  var newCenterPx = this.dayToOffset(value);
+  var deltaScrollPx = currentCenterPx - newCenterPx;
+  this._scrollByPx(-deltaScrollPx);
+};
 
 Pipeline.prototype.getZoom = function() {
   return this._z;
@@ -467,7 +694,18 @@ Pipeline.prototype.setZoom = function(zoom) {
   this._z = zoom;
   this._pixelsADay = Math.pow(2, zoom) * ZOOMING_RESOLUTION / ZOOMING_BASE_NUMBER;
 
+  var center = this.getSelectedStopValue();
+  if (null === center) {
+    center = this.getCenter();
+  }
+
+
   this._updateViewportInfo();
+  this._recalculatePositions(true);
+  this._updateWidth();
+
+  setTimeout(this.setCenter.bind(this, center), ZOOMING_ANIMATION_DURATION);
+
 };
 
 Pipeline.prototype.zoomPlus = function() {
@@ -513,6 +751,9 @@ Pipeline.prototype.setStateDragging = function() {
   if (nextStop) {
     this._dragMaxOffset = this.dayToOffset(nextStop.value - 1);
   }
+
+  this._dragIntervalLeft = this._selectedStop.prevInterval;
+  this._dragIntervalRight = this._selectedStop.nextInterval;
 };
 
 Pipeline.prototype.isStateDragging = function() {
@@ -522,6 +763,8 @@ Pipeline.prototype.isStateDragging = function() {
 Pipeline.prototype.setStateIdle = function() {
   console.log('STATE_IDLE');
   this._state = STATE_IDLE;
+  this._dragIntervalLeft = null;
+  this._dragIntervalRight = null;
 };
 
 Pipeline.prototype.isStateIdle = function() {
@@ -538,9 +781,36 @@ Pipeline.prototype.isStateWaitDrag = function() {
   return this._state === STATE_WAIT_DRAG;
 };
 
+Pipeline.prototype._recalculatePositions = function(animate) {
+  var currentStop = this.model.firstStop;
+  this._updateIntervalMarker(this.model._startInterval);
+  while (currentStop) {
+    var marker = this._stopMarkerByStop(currentStop);
+    marker.setOffset(this.dayToOffset(currentStop.value), animate);
+
+    this._updateIntervalMarker(currentStop.nextInterval);
+
+    currentStop = currentStop.next;
+  }
+  this._updateHair();
+};
+
+Pipeline.prototype._scrollByPx = function(delta) {
+  var div = this.$.root[0];
+  div.scrollLeft = div.scrollLeft + delta;
+};
+
+Pipeline.prototype._getScrollPx = function() {
+  return this.$.root[0].scrollLeft;
+};
+
+Pipeline.prototype._getWidthPx = function() {
+  return this.$.root[0].clientWidth;
+};
+
 Pipeline.prototype._updateViewportInfo = function() {
-  var scrollStart = this.$.root[0].scrollLeft;
-  var width = this.$.root[0].clientWidth;
+  var scrollStart = this._getScrollPx();
+  var width = this._getWidthPx();
   var scrollEnd = scrollStart + width;
   var dayStart = this.offsetToDay(scrollStart);
   var dayEnd = this.offsetToDay(scrollEnd);
@@ -550,6 +820,20 @@ Pipeline.prototype._updateViewportInfo = function() {
   this._updateRuler();
 };
 
+Pipeline.prototype._updateWidth = function() {
+  var minWidth = this.dayToOffset(this.model.higherBound) + WIDTH_MARGIN;
+  var viewWidth = this.$.root[0].clientWidth;
+  this.$.wrapper.css('width', Math.max(minWidth, viewWidth));
+};
+
+Pipeline.prototype._updateHair = function() {
+  var now = timeToDay(new Date());
+  var offset = this.dayToOffset(now);
+  this.$.hair.css({
+    'left': offset
+  });
+};
+
 Pipeline.prototype._updateRuler = function() {
   this.ruler.update(this.dayStart, this.dayEnd);
 };
@@ -557,9 +841,10 @@ Pipeline.prototype._updateRuler = function() {
 Pipeline.prototype._initListeners = function() {
   var root = this.$.root;
   var body = $('body');
-  root.on('click', '.' + CLASS_STOP, this._onStopMarkerClick);
   root.on('click', '.' + CLASS_INTERVAL, this._onIntervalClick);
   root.on('mousedown', '.' + CLASS_STOP, this._onStopMarkerMouseDown);
+  root.on('dblclick', '.' + CLASS_STOP_CONTAINER, this._onStopContainerDoubleClick);
+  root.on('dblclick', '.' + CLASS_STOP, this._onStopMarkerDoubleClick);
   root.on('scroll', this._onRootScroll);
 
   body.on('mouseup', this._onMouseUp);
@@ -569,6 +854,8 @@ Pipeline.prototype._initListeners = function() {
   this.model.bind('removeStop', this._onRemoveStop);
   this.model.bind('changeStopDay', this._onChangeStopDay);
   this.model.bind('boundsChange', this._onBoundsChange);
+  this.model.bind('changeInterval', this._onChangeInterval);
+  this.model.bind('removeInterval', this._onRemoveInterval);
 };
 
 Pipeline.prototype._onWaitDragTimeout = function() {
@@ -576,7 +863,7 @@ Pipeline.prototype._onWaitDragTimeout = function() {
 };
 
 Pipeline.prototype._stopFromEvent = function(e) {
-  var guid = $(e.target).attr('guid');
+  var guid = $(e.currentTarget).attr('guid');
   if (!guid) {
     throw new Error('no guid in event.target');
   }
@@ -587,8 +874,31 @@ Pipeline.prototype._stopFromEvent = function(e) {
   return stop;
 };
 
-Pipeline.prototype._onStopMarkerClick = function(e) {
+Pipeline.prototype._intervalFromEvent = function(e) {
+  var guid = $(e.currentTarget).attr('guid');
+  if (!guid) {
+    throw new Error('no guid in event.target');
+  }
+  var interval = this.model.intervalByGuid(guid);
+  if (!interval) {
+    throw new Error('interval not found');
+  }
+  return interval;
+};
+
+Pipeline.prototype._onStopMarkerDoubleClick = function(e) {
+  e.preventDefault();
   var stop = this._stopFromEvent(e);
+  this.model.removeStop(stop);
+};
+
+Pipeline.prototype._onStopContainerDoubleClick = function(e) {
+  if (e.target !== this.$.stopContainer[0]) {
+    return;
+  }
+
+  var day = this.offsetToDay(this._localOffsetFromEvent(e));
+  this.model.addStop(day);
 };
 
 Pipeline.prototype._onStopMarkerMouseDown = function(e) {
@@ -606,7 +916,10 @@ Pipeline.prototype._onRootScroll = function() {
   this._updateViewportInfo();
 };
 
-Pipeline.prototype._onIntervalClick = function() {};
+Pipeline.prototype._onIntervalClick = function(e) {
+  var interval = this._intervalFromEvent(e);
+  debugger
+};
 
 Pipeline.prototype._onMouseUp = function() {
   if (this.isStateWaitDrag()) {
@@ -648,14 +961,25 @@ Pipeline.prototype._localOffsetFromEvent = function(e) {
 Pipeline.prototype._onMouseMove = function(e) {
   if (this.isStateDragging()) {
     var offset = this._localOffsetFromEvent(e);
-    offset = this.dayToOffset(this.offsetToDay(offset));
+    var day = this.offsetToDay(offset);
+    offset = this.dayToOffset(day); //<- rounding to one day
+
     if (this._dragMaxOffset !== null && offset >= this._dragMaxOffset) {
       offset = this._dragMaxOffset;
     }
     if (this._dragMinOffset !== null && offset <= this._dragMinOffset) {
       offset = this._dragMinOffset;
     }
-    this._stopMarkerByStop(this._selectedStop).setOffset(offset);
+
+    day = this.offsetToDay(offset); //TODO: store only min/max day, not offset, to avoid double conversion
+
+    this._updateStopMarker(
+      this._stopMarkerByStop(this._selectedStop),
+      day);
+
+    this._updateIntervalMarkerStart(this._dragIntervalRight, day);
+    this._updateIntervalMarkerEnd(this._dragIntervalLeft, day);
+
     return;
   }
 };
@@ -664,17 +988,20 @@ Pipeline.prototype._onAddStop = function(stop) {
   this._addStopMarker(stop);
 };
 
-Pipeline.prototype._onRemoveStop = function(stop) {};
-
-Pipeline.prototype._onBoundsChange = function() {
-  this.setBounds(this.model.lowerBound, this.model.higherBound);
+Pipeline.prototype._onRemoveStop = function(stop) {
+  this._removeStopMarker(stop);
 };
 
-Pipeline.prototype.setBounds = function(lower, higher) {
-  var higherOffset = this.dayToOffset(higher);
-  var lowerOffset = this.dayToOffset(lower);
-  console.log('lowerOffset', lowerOffset);
-  console.log('higherOffset', higherOffset);
+Pipeline.prototype._onChangeInterval = function(interval) {
+  this._updateIntervalMarker(interval);
+};
+
+Pipeline.prototype._onRemoveInterval = function(interval) {
+  this._removeIntervalMarker(interval);
+};
+
+Pipeline.prototype._onBoundsChange = function() {
+  this._updateWidth();
 };
 
 Pipeline.prototype._onChangeStopDay = function(stop) {
@@ -684,24 +1011,88 @@ Pipeline.prototype._onChangeStopDay = function(stop) {
 };
 
 
+Pipeline.prototype._removeStopMarker = function(stop) {
+  var marker = this._stopMarkerByStop(stop);
+  if (this._selectedStop === stop) {
+    this._unselectAnyStop();
+  }
+  marker.$.remove();
+  this._unregisterStopMarker(marker);
+};
+
+
+Pipeline.prototype._removeIntervalMarker = function(interval) {
+  var marker = this._intervalMarkerByInterval(interval);
+  this._unregisterIntervalMarker(interval);
+  marker.$.remove();
+};
+
+
+Pipeline.prototype._updateIntervalMarkerStart = function(interval, value) {
+  var marker = this._intervalMarkerByInterval(interval);
+  var start = this.dayToOffset(value);
+  var end = interval.to ? this.dayToOffset(interval.to.value) : Infinity;
+  marker.setBounds(start, end);
+};
+
+Pipeline.prototype._updateIntervalMarkerEnd = function(interval, value) {
+  var marker = this._intervalMarkerByInterval(interval);
+  var start = interval.from ? this.dayToOffset(interval.from.value) : 0;
+  var end = this.dayToOffset(value);
+  marker.setBounds(start, end);
+};
+
+Pipeline.prototype._updateIntervalMarker = function(interval, animate) {
+  var marker = this._intervalMarkerByInterval(interval);
+  if (!marker) {
+    marker = new IntervalMarker({
+      guid: interval.guid
+    });
+    this.$.intervalContainer.append(marker.$);
+    this._registerIntervalMarker(marker, interval);
+  }
+
+  var left = interval.from ? this.dayToOffset(interval.from.value) : 0;
+  var right = interval.to ? this.dayToOffset(interval.to.value) : Infinity;
+  marker.setBounds(left, right, animate);
+};
+
 Pipeline.prototype._addStopMarker = function(stop) {
   var day = stop.value;
-  var offset = this.dayToOffset(day);
   var marker = new StopMarker({
     guid: stop.guid
   });
-  marker.setOffset(offset);
+
+
   this.$.stopContainer.append(marker.$);
   this._registerStopMarker(marker, stop);
 
+  this._updateStopMarker(marker, day);
+};
+
+Pipeline.prototype._updateStopMarker = function(marker, day) {
+  marker.setOffset(this.dayToOffset(day));
+  marker.setContent(this._fmt.stopLabel(day, dayToTime(day)));
 };
 
 Pipeline.prototype._stopMarkerByStop = function(stop) {
   return this._stopMarkersByGuid[stop.guid];
 };
 
+Pipeline.prototype._intervalMarkerByInterval = function(interval) {
+  return this._intervalMarkersByGuid[interval.guid];
+};
+
+Pipeline.prototype._registerIntervalMarker = function(marker, interval) {
+  this._intervalMarkersByGuid[interval.guid] = marker;
+};
+
 Pipeline.prototype._registerStopMarker = function(marker, stop) {
   this._stopMarkersByGuid[stop.guid] = marker;
+};
+
+Pipeline.prototype._unregisterIntervalMarker = function(interval) {
+  delete this._intervalMarkersByGuid[interval.guid];
 };
 
 Pipeline.prototype._unregisterStopMarker = function(stop) {
@@ -714,6 +1105,7 @@ Pipeline.prototype.destroy = function() {
   this.$.off('mousedown');
   this.$.off('mouseup');
   this.$.off('mousemove');
+  //TODO: review
 };
 
 //-----------------------------
@@ -731,12 +1123,28 @@ function StopMarker(options) {
 }
 
 StopMarker.prototype.render = function() {
-  return $('<div class="' + CLASS_STOP + '">');
+  var root = $('<div class="' + CLASS_STOP + '">');
+  var date = $('<div class="' + CLASS_STOP_DATE + '">');
+  var line = $('<div class="' + CLASS_STOP_LINE + '">');
+  this.$content = date;
+  root.append(line);
+  root.append(date);
+  return root;
 };
 
-StopMarker.prototype.setOffset = function(off) {
-  this.offset = off;
-  this.$.css('left', off);
+StopMarker.prototype.setContent = function(html) {
+  this.$content.html(html);
+};
+
+StopMarker.prototype.setOffset = function(offset, animate) {
+  this.offset = offset;
+  if (animate) {
+    this.$.animate({
+      'left': offset
+    }, ZOOMING_ANIMATION_DURATION);
+  } else {
+    this.$.css('left', offset);
+  }
 };
 
 StopMarker.prototype.getOffset = function() {
@@ -745,17 +1153,57 @@ StopMarker.prototype.getOffset = function() {
 
 
 StopMarker.prototype.setSelected = function(value) {
-  value && this.$.addClass('active') || this.$.removeClass('active');
+  value && this.$.addClass(CLASS_ACTIVE) || this.$.removeClass(CLASS_ACTIVE);
 };
 
 StopMarker.prototype.setDragging = function(value) {
-  value && this.$.addClass('dragging') || this.$.removeClass('dragging');
+  value && this.$.addClass(CLASS_DRAGGING) || this.$.removeClass(CLASS_DRAGGING);
 };
 //-----------------------------
 
-function Interval() {}
+function IntervalMarker(options) {
+  if (!options) {
+    throw new Error('no options');
+  }
+  if (!options.guid) {
+    throw new Error('no guid');
+  }
 
-Interval.prototype.render = function() {
+  this.$ = this.render();
+  this.$.attr('guid', this.guid = options.guid);
+}
+
+IntervalMarker.prototype.setBounds = function(left, right, animate) {
+  var func;
+  var el = this.$;
+  if (animate) {
+    func = function(params) {
+      el.animate(params, ZOOMING_ANIMATION_DURATION);
+    };
+  } else {
+    func = function(params) {
+      el.css(params);
+    };
+  }
+
+
+  func({
+    'left': left
+  });
+  if (right === Infinity) {
+    func({
+      'width': '',
+      'right': 0
+    });
+  } else {
+    func({
+      'width': right - left,
+      'right': ''
+    });
+  }
+};
+
+IntervalMarker.prototype.render = function() {
   return $('<div class="' + CLASS_INTERVAL + '">');
 };
 return Pipeline;
